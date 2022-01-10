@@ -44,7 +44,7 @@ public class NetworkReceive implements Receive {
     private final MemoryPool memoryPool;
     private int requestedBufferSize = -1;
     private ByteBuffer payloadBuffer = null;
-    private int byteCount = 0;
+    private volatile int byteCount = 0;
     private ReadState readState = ReadState.READ_SIZE;
 
     enum ReadState {
