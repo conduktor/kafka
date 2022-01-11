@@ -610,7 +610,7 @@ public class SelectorTest {
         String id = channel.id();
         int completedReceives = 0;
         while (selector.disconnected().isEmpty()) {
-            time.sleep(6000); // The max idle time is 5000ms
+            time.sleep(5100); // The max idle time is 5000ms
             selector.poll(completedReceives == expectedReceives ? 0 : 1000);
             completedReceives += selector.completedReceives().size();
             if (!selector.completedReceives().isEmpty()) {

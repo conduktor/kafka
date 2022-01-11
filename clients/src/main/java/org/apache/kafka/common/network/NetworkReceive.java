@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.ScatteringByteChannel;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A size delimited Receive that consists of a 4 byte network-ordered size N
@@ -42,10 +43,10 @@ public class NetworkReceive implements Receive {
     private final ByteBuffer minBuf;
     private final int maxSize;
     private final MemoryPool memoryPool;
+    private final AtomicInteger byteCount;
     private int requestedBufferSize = -1;
     private ByteBuffer payloadBuffer = null;
-    private volatile int byteCount = 0;
-    private ReadState readState = ReadState.READ_SIZE;
+    private volatile ReadState readState = ReadState.READ_SIZE;
 
     enum ReadState {
         READ_SIZE, VALIDATE_SIZE, ALLOCATE_BUFFER, READ_PAYLOAD, COMPLETE
@@ -75,6 +76,7 @@ public class NetworkReceive implements Receive {
 
         this.minBuf = (ByteBuffer) ByteBuffer.allocate(SslUtils.SSL_RECORD_HEADER_LENGTH).position(4);
         this.sizeBuf = (ByteBuffer) this.minBuf.duplicate().position(0).limit(4);
+        this.byteCount = new AtomicInteger(0);
     }
 
     @SuppressWarnings("fallthrough")
@@ -126,7 +128,7 @@ public class NetworkReceive implements Receive {
                 break;
         }
 
-        this.byteCount += read;
+        this.byteCount.addAndGet(read);
 
         return read;
     }
@@ -211,7 +213,7 @@ public class NetworkReceive implements Receive {
     }
 
     public int bytesRead() {
-        return this.byteCount;
+        return this.byteCount.get();
     }
 
     /**
