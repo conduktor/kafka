@@ -99,6 +99,13 @@ public class SslSelectorTest extends SelectorTest {
         return sslClientConfigs;
     }
 
+    @Override
+    @Test
+    @Disabled
+    public void testCloseOldestConnectionWithMultiplePendingReceives() throws Exception {
+        super.testCloseOldestConnectionWithMultiplePendingReceives();
+    }
+
     @Test
     public void testConnectionWithCustomKeyManager() throws Exception {
 
