@@ -73,6 +73,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.security.scram.internals.ScramMechanism.SCRAM_SHA_256;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -86,7 +87,7 @@ import static org.mockito.Mockito.when;
 public class SaslServerAuthenticatorTest {
 
     private final String clientId = "clientId";
-    
+
     @Test
     public void testOversizeRequest() throws IOException {
         TransportLayer transportLayer = mock(TransportLayer.class);
@@ -95,15 +96,30 @@ public class SaslServerAuthenticatorTest {
         SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer,
                 SCRAM_SHA_256.mechanismName(), new DefaultChannelMetadataRegistry());
 
+        ByteBuffer testData =
+                (ByteBuffer) ByteBuffer.allocate(4 + (BrokerSecurityConfigs.DEFAULT_SASL_SERVER_MAX_RECEIVE_SIZE + 1))
+                        .putInt(BrokerSecurityConfigs.DEFAULT_SASL_SERVER_MAX_RECEIVE_SIZE + 1)
+                        .put(new byte[BrokerSecurityConfigs.DEFAULT_SASL_SERVER_MAX_RECEIVE_SIZE]).rewind();
+
         when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
-            invocation.<ByteBuffer>getArgument(0).putInt(BrokerSecurityConfigs.DEFAULT_SASL_SERVER_MAX_RECEIVE_SIZE + 1);
-            return 4;
+            ByteBuffer inputBuffer = invocation.<ByteBuffer>getArgument(0);
+            int remaining = Math.min(testData.remaining(), inputBuffer.remaining());
+
+            ByteBuffer slice = (ByteBuffer) testData.slice().limit(remaining);
+
+            // write the test data into to the test
+            inputBuffer.put(slice);
+
+            testData.position(testData.position() + remaining);
+
+            return remaining;
         });
         assertThrows(SaslAuthenticationException.class, authenticator::authenticate);
-        verify(transportLayer).read(any(ByteBuffer.class));
+        verify(transportLayer, times(2)).read(any(ByteBuffer.class));
     }
 
     @Test
+    @SuppressWarnings("checkstyle:emptyblock")
     public void testUnexpectedRequestType() throws IOException {
         TransportLayer transportLayer = mock(TransportLayer.class);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
@@ -114,13 +130,23 @@ public class SaslServerAuthenticatorTest {
         RequestHeader header = new RequestHeader(ApiKeys.METADATA, (short) 0, clientId, 13243);
         ByteBuffer headerBuffer = RequestTestUtils.serializeRequestHeader(header);
 
+        final ByteBuffer testData =
+                ByteBuffer.allocate(4 + headerBuffer.remaining()).putInt(headerBuffer.remaining());
+        testData.put(headerBuffer);
+        testData.rewind();
+
         when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
-            invocation.<ByteBuffer>getArgument(0).putInt(headerBuffer.remaining());
-            return 4;
-        }).then(invocation -> {
-            // serialize only the request header. the authenticator should not parse beyond this
-            invocation.<ByteBuffer>getArgument(0).put(headerBuffer.duplicate());
-            return headerBuffer.remaining();
+            ByteBuffer inputBuffer = invocation.<ByteBuffer>getArgument(0);
+            int remaining = Math.min(testData.remaining(), inputBuffer.remaining());
+
+            ByteBuffer slice = (ByteBuffer) testData.slice().limit(remaining);
+
+            // write the test data into to the test
+            inputBuffer.put(slice);
+
+            testData.position(testData.position() + remaining);
+
+            return remaining;
         });
 
         try {
@@ -130,7 +156,7 @@ public class SaslServerAuthenticatorTest {
             // expected exception
         }
 
-        verify(transportLayer, times(2)).read(any(ByteBuffer.class));
+        assertFalse(testData.hasRemaining());
     }
 
     @Test
@@ -331,14 +357,25 @@ public class SaslServerAuthenticatorTest {
         ByteBuffer requestBuffer = request.serialize();
         requestBuffer.rewind();
 
+        int sizeOfPayload = headerBuffer.remaining() + requestBuffer.remaining();
+        ByteBuffer testData = ByteBuffer.allocate(4 + sizeOfPayload).putInt(sizeOfPayload);
+        testData.put(headerBuffer);
+        testData.put(requestBuffer);
+        testData.rewind();
+
+
         when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
-            invocation.<ByteBuffer>getArgument(0).putInt(headerBuffer.remaining() + requestBuffer.remaining());
-            return 4;
-        }).then(invocation -> {
-            invocation.<ByteBuffer>getArgument(0)
-                    .put(headerBuffer.duplicate())
-                    .put(requestBuffer.duplicate());
-            return headerBuffer.remaining() + requestBuffer.remaining();
+            ByteBuffer inputBuffer = invocation.<ByteBuffer>getArgument(0);
+            int remaining = Math.min(testData.remaining(), inputBuffer.remaining());
+
+            ByteBuffer slice = (ByteBuffer) testData.slice().limit(remaining);
+
+            // write the test data into to the test
+            inputBuffer.put(slice);
+
+            testData.position(testData.position() + remaining);
+
+            return remaining;
         });
     }
 
@@ -359,7 +396,7 @@ public class SaslServerAuthenticatorTest {
         assertEquals(expectedSoftwareName, metadataRegistry.clientInformation().softwareName());
         assertEquals(expectedSoftwareVersion, metadataRegistry.clientInformation().softwareVersion());
 
-        verify(transportLayer, times(2)).read(any(ByteBuffer.class));
+        assertFalse(testData.hasRemaining());
     }
 
     private SaslServerAuthenticator setupAuthenticator(Map<String, ?> configs, TransportLayer transportLayer,
