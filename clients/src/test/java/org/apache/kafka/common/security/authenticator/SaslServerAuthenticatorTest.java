@@ -351,7 +351,7 @@ public class SaslServerAuthenticatorTest {
         mockRequest(new RequestHeader(request.apiKey(), request.apiKey().latestVersion(), clientId, 0), request, transportLayer);
     }
 
-    private void mockRequest(RequestHeader header, AbstractRequest request, TransportLayer transportLayer) throws IOException {
+    private ByteBuffer mockRequest(RequestHeader header, AbstractRequest request, TransportLayer transportLayer) throws IOException {
         ByteBuffer headerBuffer = RequestTestUtils.serializeRequestHeader(header);
 
         ByteBuffer requestBuffer = request.serialize();
@@ -377,6 +377,7 @@ public class SaslServerAuthenticatorTest {
 
             return remaining;
         });
+        return testData;
     }
 
     private void testApiVersionsRequest(short version, String expectedSoftwareName,
@@ -389,7 +390,7 @@ public class SaslServerAuthenticatorTest {
 
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, clientId, 0);
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
-        mockRequest(header, request, transportLayer);
+        ByteBuffer testData = mockRequest(header, request, transportLayer);
 
         authenticator.authenticate();
 
